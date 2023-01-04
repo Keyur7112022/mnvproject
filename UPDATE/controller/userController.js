@@ -2,27 +2,43 @@
 const admin = require("../models/admin-user");
 const leave = require("../models/leave");
 const toDo = require("../models/todo");
+const news = require("../models/news");
+const Company = require("../models/Company");
 const mongoose = require("mongoose");
 const register = require("../models/register"),
   auth = require("../middleware/auth"),
   bcrypt = require("bcrypt"),
   jwt = require("jsonwebtoken");
+const { find } = require("../models/admin-user");
 
+
+//request new leave
 exports.Leave_of = async function (req, res) {
   try {
     // Get user inputs
-    const { SelectType, Leaves, SelectDate, Note, AddMember } = req.body;
+    const {
+      SelectType,
+      Leaves,
+      Note,
+      AddMember,
+      startTime,
+      endTime,
+      startDate,
+      endDate,
+    } = req.body;
     const user = req.params.id;
 
     // Validate user input
-    if (!(SelectType && Leaves && SelectDate && Note && AddMember)) {
+    if (!(SelectType && Leaves && Note && AddMember)) {
       res.status(400).send("All input is required");
     }
-
     let time_of = new leave({
       SelectType,
       Leaves,
-      SelectDate,
+      startDate,
+      endDate,
+      startTime,
+      endTime,
       Note,
       AddMember,
       user,
@@ -39,10 +55,31 @@ exports.Leave_of = async function (req, res) {
   }
 };
 
+//get leave list particular user
 exports.getLeaveList = async function (req, res) {
   try {
-    const allLeaves = await leave.find({ user: req.params.id });
-    res.json(allLeaves);
+    const allleaves = await leave.find({ user: req.params.id });
+    res.json(allleaves);
+  } catch (error) {
+    next(error);
+  }
+};
+
+//get all leaves
+exports.Leaves = async function (req, res) {
+  try {
+    const all_leave_requests = await leave.find();
+    res.json(all_leave_requests);
+  } catch (error) {
+    next(error);
+  }
+};
+
+//get user Name
+exports.getUserName = async function (req, res) {
+  try {
+    const user_Name = await register.findById(req.params.id).select("fullName");
+    res.json(user_Name);
   } catch (error) {
     next(error);
   }
@@ -51,8 +88,15 @@ exports.getLeaveList = async function (req, res) {
 //To do
 exports.toDo = async function (req, res) {
   try {
-    const { taskName, taskType, addMember, DueDate, Description, done } =
-      req.body;
+    const {
+      taskName,
+      taskType,
+      addMember,
+      DueDate,
+      Description,
+      statusType,
+      status,
+    } = req.body;
 
     // Validate  input
     if (!(taskName && taskType && addMember && DueDate && Description)) {
@@ -64,7 +108,8 @@ exports.toDo = async function (req, res) {
       addMember,
       DueDate,
       Description,
-      done,
+      statusType,
+      status,
     });
     checklist.save();
     return res.json({
@@ -169,23 +214,19 @@ exports.Login = async function (req, res) {
         { user_id: user._id, email },
         process.env.TOKEN_KEY,
         {
-          expiresIn: 4000000,
+          expiresIn: "400000",
         }
       );
-      req.user = register;
+      req.user = user;
       user.token = token;
       res.status(200).json(user);
-      const userToken = user.token;
-      const userId = user.id;
     } else {
       res.status(200).json({ msg: "password not match!" });
     }
   } catch (err) {
     console.log("err", err);
-    res.json(err.message);
+    res.json({ message: err });
   }
-
-  console.log("executed");
 };
 
 //admin schema
@@ -193,11 +234,10 @@ exports.register_admin = async function (req, res) {
   try {
     //user input
     const { fullName, email, password } = req.body;
-    console.log("step 1");
-    // Validate user input
     if (!(fullName && email && password)) {
       throw "All input is required";
     }
+    console.log("step 1");
     const oldUser = await register.findOne({ email });
 
     if (oldUser) {
@@ -231,10 +271,11 @@ exports.register_admin = async function (req, res) {
   }
 };
 
-exports.register_user = async function (req, res) {
+//user registration by admin panel only
+exports.New_user = async function (req, res) {
   try {
     //user input
-    const { fullName, email, password } = req.body;
+    const { fullName, email, password, position } = req.body;
     console.log("step 1");
     // Validate user input
     if (!(fullName && email && password)) {
@@ -251,6 +292,7 @@ exports.register_user = async function (req, res) {
       admin: false,
       fullName,
       email,
+      position,
       password: encryptedPassword,
     });
     console.log("step 3");
@@ -298,7 +340,7 @@ exports.adminLogin = async function (req, res) {
         { user_id: user._id, email },
         process.env.TOKEN_KEY,
         {
-          expiresIn: 4000000,
+          expiresIn: "259200000",
         }
       );
       req.user = admin;
@@ -321,8 +363,27 @@ exports.Employees = async function (req, res) {
   try {
     const all_users_data = await register
       .find()
-      .select(["fullName", "email", "number", "position", "manager", "office"]);
+      .select([
+        "fullName",
+        "email",
+        "number",
+        "position",
+        "manager",
+        "office",
+        "profile_pic",
+      ]);
     res.send(all_users_data);
+  } catch (error) {
+    res.send(error);
+  }
+};
+
+//get all employees
+exports.Tasks = async function (req, res) {
+  try {
+    const all_tasks = await toDo.find();
+
+    res.send(all_tasks);
   } catch (error) {
     res.send(error);
   }
@@ -343,31 +404,38 @@ exports.UpdateTask = async function (req, res) {
   try {
     const updatedTask = await toDo.findByIdAndUpdate(
       { _id: req.params.id },
-      { $set: { done: true } },
+      { $set: { done: true, status: "Completed", statusType: "success" } },
       { new: true }
     );
-
     res.send(updatedTask);
   } catch (error) {
     res.next(error);
   }
 };
 
+//update particular task
+exports.UpdateLeave = async function (req, res) {
+  try {
+    const newobj = {
+      Approved: "success",
+      Pending: "warning",
+      Rejected: "danger",
+    };
+    const value = req.body.status;
+    const updatedLeave = await leave.findByIdAndUpdate(
+      { _id: req.params.id },
+      { $set: { status: value, statusType: newobj[value] } },
+      { new: true }
+    );
+    res.send(updatedLeave);
+  } catch (error) {
+    res.json(error);
+  }
+};
+
 exports.updateProfile = async function (req, res, next) {
   try {
-    const {
-      fullName,
-      number,
-      Gender,
-      DOB,
-      Address,
-      City,
-      Country,
-      Postal,
-      Bank_name,
-      Account_name,
-      Account_no,
-      Branch,
+    const { fullName, number, Gender, DOB, Address, City, Country, Postal, Bank_name, Account_name, Account_no, Branch,
     } = await req.body;
     console.log(req.params.id);
     const userInfo = await register.findByIdAndUpdate(
@@ -406,8 +474,8 @@ exports.updateProfile = async function (req, res, next) {
 //my profile
 exports.MyProfile = async function (req, res, next) {
   try {
-    const myProFile = await register.findById(req.params.id);
-    res.json(myProFile);
+    const myprofile = await register.findById(req.params.id);
+    res.json(myprofile);
   } catch (error) {
     res.json(error);
   }
@@ -416,115 +484,92 @@ exports.MyProfile = async function (req, res, next) {
 //get admin profile
 exports.MyAdminProfile = async function (req, res, next) {
   try {
-    const myProfile = await admin.findById(req.params.id);
-    res.json(myProfile);
+    const myprofile = await admin.findById(req.params.id);
+    res.json(myprofile);
   } catch (error) {
     res.json(error);
   }
 };
 
-exports.date = async function (req, res, next) {
+//get dob
+exports.date = async function (req, res, err) {
   try {
-    const userDate = await register.find().select("Info.DOB");
+    const userDate = await news.findById(req.params.id)
     res.json(userDate);
-    next();
+
   } catch (error) {
-    next(error);
+    res.json(err.message)
   }
 };
 
-//change password
-exports.change = async function (req, res) {
-
+// news update
+exports.event = async function (req, res) {
   try {
-    const { email, password, newPassword, newPassConfirm } = req.body;
-    if (!(email && password && newPassword && newPassConfirm)) {
-      res.status(400).send("All input are required");
-    }
-    const user = await register.findOne({ email });
-    if (
-      user === null ||
-      (await bcrypt.compare(password, user.password)) === false
-    ) {
-      res.status(400).send("Invalid Credentials");
-    }
-    if (newPassword !== newPassConfirm) {
-      res.status(400).send("New password and Password confirmation must match");
-    }
-    if (
-      user &&
-      (await bcrypt.compare(password, user.password)) &&
-      newPassword === newPassConfirm
-    ) {
-      let encryptedPassword = await bcrypt.hash(newPassConfirm, 10);
-      user.password = encryptedPassword;
-      user.save();
-      res.status(200).send("Password Changed Successfully");
-    }
-  } catch (err) {
-    res.json(err.message);
+    const { News, startDate } = req.body;
+
+    let occasions = new news({
+      News,
+      startDate
+    })
+    res.json(occasions)
+    occasions.save()
+  } catch (error) {
+    res.json(error.message)
   }
 }
 
-//forgot
-exports.forgot = async function (req, res) {
-  const email = req.body.email;
+//get all the events to show frontend side 
+exports.ev = async function (req, res) {
   try {
-    const user = await register.findOne({ email: email });
-    if (!user) {
-      res.status(400).json;
-    } else {
-      const random = randomstring.generate();
 
-      const data = await User.findByIdAndUpdate(
-        { _id: user.id },
-        { $set: { temp: random } },
-        { new: true }
-      );
-      sendresetmail(user.email, user.fullName, random);
-      res.json(data);
-      console.log(data);
-    }
-  } catch (err) {
-    res.json(err.message);
-  }
-};
+    const getdetails = await news.find()
+    res.json(getdetails)
 
-const sendresetmail = async (name, email, temp) => {
-  try {
-    const transporter = nodemailer.createTransport({
-      host: "smtp.ethereal.email",
-      port: 587,
-      auth: {
-        user: "devonte48@ethereal.email",
-        pass: "ztN6sJ4SPfvnKnjUqc",
-      },
-    });
-
-    const mailOptions = {
-      from: "devonte48@ethereal.email",
-      to: "wirova3970@fdsdfdfddfddfdfdfdd.com",
-      subject: "Reset password",
-      html:
-        '<p> Hi, please click <a href="http://localhost:3000/api/resetpassword?token=' +
-        temp +
-        '"> here</a>',
-    };
-
-    transporter.sendMail(mailOptions, function (error, info) {
-      if (error) {
-        console.log(error);
-      } else {
-        console.log("mail sent", info.response);
-      }
-    });
   } catch (error) {
-    res.json(err.message);
+    res.json(err.message)
   }
-};
+}
 
+//
+exports.Co = async function (req, res) {
+  try {
+    const { office, city, company, department } = req.body
+    let Sector = new Company({
+      office,
+      city,
+      company,
+      department
+    })
+    res.json(Sector)
+    Sector.save()
+
+  } catch (error) {
+    res.json(error.message)
+  }
+}
+
+exports.so = async function (req, res) {
+  try {
+    const { office, department } = req.body
+
+    const usde = await Company.findByIdAndUpdate(
+      { _id: req.params.id },
+      {
+        $set: {
+
+          office,
+          department
+        }
+
+      },
+      { new: true })
+    res.json(usde)
+  } catch (error) {
+    res.json(error.msg)
+  }
+}
 
 //testing authorization
 exports.auth = function (req, res) {
-  res.status(200).send("Welcome to the BLACK PEARL site ");
+  res.status(200).send("Welcome to My World built in node js ");
 };

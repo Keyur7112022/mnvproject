@@ -19,14 +19,13 @@ const registerSchema = new mongoose.Schema({
   },
   number: {
     type: Number,
-    default: "7845960132",
   },
   department: {
     type: String,
   },
   position: {
     type: String,
-    default: "Software Developer",
+    default: "MediaNV",
   },
   manager: {
     type: String,
@@ -41,7 +40,7 @@ const registerSchema = new mongoose.Schema({
   },
   Info: {
     Gender: { type: String, default: "" },
-    DOB: { type: String, default: "" },
+    DOB: { type: Date, default: "" },
     Address: {
       Address: { type: String, default: "" },
       City: { type: String, default: "" },
@@ -56,6 +55,11 @@ const registerSchema = new mongoose.Schema({
       Branch: { type: String, default: "" },
     },
   },
+  profile_pic: {
+    type: String,
+    default: "",
+  },
+
 });
 
 module.exports = mongoose.model("user", registerSchema);

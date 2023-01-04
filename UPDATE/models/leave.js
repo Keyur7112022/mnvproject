@@ -12,7 +12,10 @@ const Time_of_Schema = new Schema({
     optional: ["Single", "Multiple"],
     message: "Select the day.!",
   },
-  SelectDate: { type: String, required: "Select the start Date!" },
+  startDate: { type: Date },
+  endDate: { type: Date },
+  startTime: { type: Date },
+  endTime: { type: Date },
   Note: { type: String },
   AddMember: { type: String, required: "Email address is required!" },
   status: {

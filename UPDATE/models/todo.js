@@ -11,10 +11,9 @@ const ChecklistSchema = new Schema({
     optional: ["Checkbox", "Employee Information", "File upload"],
   },
   addMember: {
-    type: String,
-    required: "Email address is required!",
+    type: Array,
   },
-  DueDate: { type: String, required: true },
+  DueDate: { type: Date },
   Description: {
     type: String,
   },
@@ -25,6 +24,10 @@ const ChecklistSchema = new Schema({
   status: {
     type: String,
     default: "Completed",
+  },
+  statusType: {
+    type: String,
+    default: "danger",
   },
 });
 module.exports = mongoose.model("toDo", ChecklistSchema);
