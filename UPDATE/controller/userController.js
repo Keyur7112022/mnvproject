@@ -2,15 +2,16 @@
 const admin = require("../models/admin-user");
 const leave = require("../models/leave");
 const toDo = require("../models/todo");
-const news = require("../models/news");
-const Company = require("../models/Company");
+const noti = require("../models/notifications");
 const mongoose = require("mongoose");
+const news = require("../models/events");
+const nodemailer = require("nodemailer");
+const randomstring = require("randomstring");
+
 const register = require("../models/register"),
   auth = require("../middleware/auth"),
   bcrypt = require("bcrypt"),
   jwt = require("jsonwebtoken");
-const { find } = require("../models/admin-user");
-
 
 //request new leave
 exports.Leave_of = async function (req, res) {
@@ -78,7 +79,7 @@ exports.Leaves = async function (req, res) {
 //get user Name
 exports.getUserName = async function (req, res) {
   try {
-    const user_Name = await register.findById(req.params.id).select("fullName");
+    const user_Name = await register.findById(req.params.id);
     res.json(user_Name);
   } catch (error) {
     next(error);
@@ -190,7 +191,6 @@ exports.register_user = async function (req, res) {
 
 //login user && admin
 exports.Login = async function (req, res) {
-  console.log("login api called");
   try {
     const { email, password } = req.body;
 
@@ -234,23 +234,35 @@ exports.register_admin = async function (req, res) {
   try {
     //user input
     const { fullName, email, password } = req.body;
+
+    // Validate user input
     if (!(fullName && email && password)) {
       throw "All input is required";
     }
-    console.log("step 1");
+
+    let username = email;
+
+    let r = new RegExp(`${username.split("@")[1]}`);
+
+    let old = await register.find();
+    for (let i = 0; i < old.length; i++) {
+      if (r.test(old[i])) {
+        throw "domain already exist";
+      }
+    }
     const oldUser = await register.findOne({ email });
 
     if (oldUser) {
       throw "user exist";
     }
-    console.log("step 2");
+
     let encryptedPassword = await bcrypt.hash(password, 10);
     let user = new register({
       fullName,
       email,
       password: encryptedPassword,
     });
-    console.log("step 3");
+
     // Create token
     const token = jwt.sign(
       { user_id: user._id, email },
@@ -259,10 +271,10 @@ exports.register_admin = async function (req, res) {
         expiresIn: 400000,
       }
     );
-    console.log("step 4");
+
     // save user token
     user.token = token;
-    console.log("Step 5");
+
     // return new user
     res.status(200).json(user);
     user.save();
@@ -275,7 +287,8 @@ exports.register_admin = async function (req, res) {
 exports.New_user = async function (req, res) {
   try {
     //user input
-    const { fullName, email, password, position } = req.body;
+    const { fullName, email, password, position, manager, admin, joinDate } =
+      req.body;
     console.log("step 1");
     // Validate user input
     if (!(fullName && email && password)) {
@@ -289,10 +302,12 @@ exports.New_user = async function (req, res) {
     console.log("step 2");
     let encryptedPassword = await bcrypt.hash(password, 10);
     let user = new register({
-      admin: false,
+      joinDate,
+      admin,
       fullName,
       email,
       position,
+      manager,
       password: encryptedPassword,
     });
     console.log("step 3");
@@ -346,7 +361,7 @@ exports.adminLogin = async function (req, res) {
       req.user = admin;
       user.token = token;
       res.status(200).json(user);
-      const userToken = user.token;
+      const userToekn = user.token;
       const userId = user.id;
     } else {
       res.status(200).json({ msg: "password not match!" });
@@ -364,6 +379,7 @@ exports.Employees = async function (req, res) {
     const all_users_data = await register
       .find()
       .select([
+        "admin",
         "fullName",
         "email",
         "number",
@@ -393,7 +409,7 @@ exports.Tasks = async function (req, res) {
 exports.GetTasks = async function (req, res, next) {
   try {
     const userTask = await toDo.find({ addMember: req.params.id });
-    res.json(userTask);
+    res.send(userTask);
   } catch (error) {
     next(error);
   }
@@ -407,6 +423,7 @@ exports.UpdateTask = async function (req, res) {
       { $set: { done: true, status: "Completed", statusType: "success" } },
       { new: true }
     );
+
     res.send(updatedTask);
   } catch (error) {
     res.next(error);
@@ -427,15 +444,29 @@ exports.UpdateLeave = async function (req, res) {
       { $set: { status: value, statusType: newobj[value] } },
       { new: true }
     );
+
     res.send(updatedLeave);
   } catch (error) {
-    res.json(error);
+    res.next(error);
   }
 };
 
+//update profile
 exports.updateProfile = async function (req, res, next) {
   try {
-    const { fullName, number, Gender, DOB, Address, City, Country, Postal, Bank_name, Account_name, Account_no, Branch,
+    const {
+      fullName,
+      number,
+      Gender,
+      DOB,
+      Address,
+      City,
+      Country,
+      Postal,
+      Bank_name,
+      Account_name,
+      Account_no,
+      Branch,
     } = await req.body;
     console.log(req.params.id);
     const userInfo = await register.findByIdAndUpdate(
@@ -492,84 +523,236 @@ exports.MyAdminProfile = async function (req, res, next) {
 };
 
 //get dob
-exports.date = async function (req, res, err) {
+exports.date = async function (req, res, next) {
   try {
-    const userDate = await news.findById(req.params.id)
+    const userDate = await register
+      .find()
+      .select(["Info.DOB", "fullName", "profile_pic", "joinDate"]);
     res.json(userDate);
-
+    next();
   } catch (error) {
-    res.json(err.message)
+    next(error);
   }
 };
 
-// news update
+//delete user
+exports.deleteuser = async function (req, res, next) {
+  try {
+    let setuser = await register.findById(req.params.id);
+    if (!setuser) {
+      res.json({ msg: "uer not found" });
+    } else {
+      let delUser = await register.findByIdAndDelete(req.params.id);
+      res.json(delUser);
+    }
+  } catch (error) {
+    res.json({ msg: "error" });
+    next();
+  }
+};
+
+//delete task
+exports.deltask = async function (req, res, next) {
+  try {
+    let setuser = await toDo.findById(req.params.id);
+    if (!setuser) {
+      res.json({ msg: "uer not found" });
+    } else {
+      let delUser = await toDo.findByIdAndDelete(req.params.id);
+      res.json(delUser);
+    }
+  } catch (error) {
+    res.json({ msg: "error" });
+    next();
+  }
+};
+
+//delete notification
+exports.delNoti = async function (req, res, next) {
+  try {
+    let setuser = await noti.findById(req.params.id);
+    if (!setuser) {
+      res.json({ msg: "noti not found" });
+    } else {
+      let delUser = await noti.findByIdAndDelete(req.params.id);
+      res.json(delUser);
+    }
+  } catch (error) {
+    res.json({ msg: "error" });
+    next();
+  }
+};
+
+//add notification for user
+exports.NotifyUser = async function (req, res, next) {
+  try {
+    const { user, notificationmsg } = req.body;
+    const date = Date.now();
+    let notification = new noti({
+      user,
+      notificationmsg,
+      date,
+    });
+
+    notification.save();
+    res.json({ notification });
+  } catch (error) {
+    next(error);
+  }
+};
+
+//get all notifications by tasks
+exports.getNotifications = async function (req, res, next) {
+  try {
+    const allnoti = await noti.find({ user: req.params.id });
+
+    res.json(allnoti);
+  } catch (error) {
+    next(error);
+  }
+};
+
+//passwor reset
+
+//1. forgot password
+exports.forgotPass = async (req, res, next) => {
+  try {
+    const email = req.body.email;
+
+    let user = await register.findOne({ email: email });
+    if (!user) {
+      return res.status(400).json({
+        msg: "user not found",
+      });
+    }
+    const temp = randomstring.generate();
+    sendresetmail(user.fullName, user.email, temp);
+
+    await register.findByIdAndUpdate(
+      { _id: user.id },
+      { $set: { temp: temp } },
+      { new: true }
+    );
+
+    res.status(200).send("Email sent");
+  } catch (err) {
+    res.status(400).json({
+      msg: "not found",
+    });
+    next();
+  }
+};
+
+const sendresetmail = async (fullName, email, temp) => {
+  try {
+    const transporter = nodemailer.createTransport({
+      host: "smtp.ethereal.email",
+      port: 587,
+      auth: {
+        user: "krista56@ethereal.email",
+        pass: "KxrjUz7SEwUUuJGBgN",
+      },
+    });
+
+    const mailOptions = {
+      from: "krista56@ethereal.email",
+      to: "wirova3970@fdsdfdfddfddfdfdfdd.com",
+      subject: "Reset password",
+      html:
+        '<p> Hi, please click <a href="http://localhost:8080/#/resetpassword?token=' +
+        temp +
+        '"> here</a>',
+    };
+
+    transporter.sendMail(mailOptions, function (error, info) {
+      if (error) {
+        console.log(error);
+      } else {
+        console.log("mail sent", info.response);
+      }
+    });
+  } catch (error) {
+    console.log(error);
+  }
+};
+
+//2. reset password
+exports.resetPass = async (req, res) => {
+  try {
+    const temp = req.query.token;
+    const tokenData = await register.findOne({ temp: temp });
+    if (!temp) {
+      res.status(400).json({
+        msg: "invalid token",
+      });
+    }
+
+    const password = req.body.newPassword;
+    const updatedPassword = await bcrypt.hash(password, 10);
+
+    const userData = await register.findByIdAndUpdate(
+      { _id: tokenData.id },
+      { $set: { password: updatedPassword, temp: "" } },
+      { new: true }
+    );
+
+    res.status(200).json(userData);
+  } catch (error) {
+    res.status(400).json({
+      msg: "something went wrong",
+    });
+  }
+};
+
+//events/news
 exports.event = async function (req, res) {
   try {
-    const { News, startDate } = req.body;
+    const { title, eventDate, detail } = req.body;
 
     let occasions = new news({
-      News,
-      startDate
-    })
-    res.json(occasions)
-    occasions.save()
+      title,
+      eventDate,
+      detail,
+    });
+    res.json(occasions);
+    occasions.save();
   } catch (error) {
-    res.json(error.message)
+    res.json(error.message);
   }
-}
+};
 
-//get all the events to show frontend side 
-exports.ev = async function (req, res) {
+//get events/news
+exports.getevent = async function (req, res) {
   try {
+    const allnoti = await news.find({ user: req.params.id });
 
-    const getdetails = await news.find()
-    res.json(getdetails)
-
+    res.json(allnoti);
   } catch (error) {
-    res.json(err.message)
+    next(error);
   }
-}
+};
 
-//
-exports.Co = async function (req, res) {
+//dashboard
+exports.getUserupdate = async function (req, res) {
   try {
-    const { office, city, company, department } = req.body
-    let Sector = new Company({
-      office,
-      city,
-      company,
-      department
-    })
-    res.json(Sector)
-    Sector.save()
-
+    const userdetails = await register.find();
+    const thisday = await leave.find();
+    res.json({ userdetails, thisday });
   } catch (error) {
-    res.json(error.message)
+    next(error);
   }
-}
+};
 
-exports.so = async function (req, res) {
+exports.getleaveupdate = async function (req, res) {
   try {
-    const { office, department } = req.body
-
-    const usde = await Company.findByIdAndUpdate(
-      { _id: req.params.id },
-      {
-        $set: {
-
-          office,
-          department
-        }
-
-      },
-      { new: true })
-    res.json(usde)
+    const thisday = await leave.find();
+    res.json(thisday);
   } catch (error) {
-    res.json(error.msg)
+    next(error);
   }
-}
+};
 
 //testing authorization
 exports.auth = function (req, res) {
-  res.status(200).send("Welcome to My World built in node js ");
+  res.status(200).send("Welcome to the BLACK PEARL site ");
 };

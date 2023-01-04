@@ -33,6 +33,11 @@ const registerSchema = new mongoose.Schema({
   },
   token: {
     type: String,
+    default: "",
+  },
+  temp: {
+    type: String,
+    default: "",
   },
   office: {
     type: String,
@@ -59,7 +64,10 @@ const registerSchema = new mongoose.Schema({
     type: String,
     default: "",
   },
-
+  joinDate: {
+    type: Date,
+    default: Date.now(),
+  },
 });
 
 module.exports = mongoose.model("user", registerSchema);

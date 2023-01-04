@@ -21,24 +21,22 @@ module.exports = function (app) {
   app.route("/my-task").post(UserApi.tasklist);
 
   //register
-  app.route("/register").post(UserApi.register_admin);//no auth
+  app.route("/register").post(UserApi.register_admin);
 
   //user register by admin portal
-  app.route("/register/user").post(UserApi.New_user);//no auth
+  app.route("/register/user").post(UserApi.New_user);
 
   //user login
-  app.route("/login").post(UserApi.Login); //no Auth
+  app.route("/login").post(UserApi.Login);
 
-  //get all the employee details
   app.route("/employees").get(UserApi.Employees);
 
-  //get all the task to user side
   app.route("/alltask").get(UserApi.Tasks);
 
-  //get all leaves just user name
+  //get all leaves just user NAME
   app.route("/usertask/:id").get(UserApi.getUserName);
 
-  app.route("/tasks/:id").get(auth, UserApi.GetTasks);
+  app.route("/tasks/:id").get(UserApi.GetTasks);
 
   app.route("/updatetask/:id").post(UserApi.UpdateTask);
 
@@ -46,31 +44,44 @@ module.exports = function (app) {
   app.route("/updateleavestatus/:id").post(UserApi.UpdateLeave);
 
   //admin-user
-  app.route("/login/admin").post(UserApi.adminLogin); //no auth
+  app.route("/login/admin").post(UserApi.adminLogin);
 
   //edit user profile
   app.route("/updateprofile/:id").post(UserApi.updateProfile);
-
   //get profile
   app.route("/myprofile/:id").get(UserApi.MyProfile);
 
   //get admin profile
   app.route("/myadminprofile/:id").get(UserApi.MyAdminProfile);
 
-  //get the all the events
-  app.route("/dates/:id").get(UserApi.date);
+  app.route("/dates").get(UserApi.date);
+
+  //delete user
+  app.route("/deleteuser/:id").delete(UserApi.deleteuser);
+
+  //delete task
+  app.route("/deltask/:id").delete(UserApi.deltask);
+
+  //delete notifications
+  app.route("/deletenoti/:id").delete(UserApi.delNoti);
+
+  //create notification
+  app.route("/notify").post(UserApi.NotifyUser);
+
+  //get all notification by id
+  app.route("/notify/:id").get(UserApi.getNotifications);
+
+  //reset password
+  app.route("/forgot").post(UserApi.forgotPass);
+  app.route("/resetpass").post(UserApi.resetPass);
 
   //events
-  app.route("/events/:id").post(UserApi.event)
+  app.route("/events").post(UserApi.event);
 
-  //get event
-  app.route("/getevent").get(UserApi.ev)
+  app.route("/getevent").get(UserApi.getevent);
 
-  //company info
-  app.route("/CoInfo").post(UserApi.Co)
+  //dashboard
+  app.route("/userprofiles").get(UserApi.getUserupdate);
 
-  //
-  app.route("/de/:id").post(UserApi.so)
-
-
+  app.route("/leaveupdate").get(UserApi.getleaveupdate);
 };
